@@ -32,13 +32,9 @@ import (
 //	CREATE INDEX idx_sessions_user_id ON sessions(user_id) WHERE user_id IS NOT NULL;
 //	CREATE INDEX idx_sessions_authenticated ON sessions(authenticated) WHERE authenticated = TRUE;
 type Store struct {
-	db              DB
+	db              *sql.DB
 	log             session.Logger
 	cleanerInterval time.Duration
-}
-type DB interface {
-	QueryRow(ctx context.Context, query string, args ...any) *sql.Row
-	Exec(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 func (s *Store) Get(ctx context.Context, id string) (session.SessionData, error) {
@@ -62,7 +58,7 @@ func (s *Store) Get(ctx context.Context, id string) (session.SessionData, error)
 		updatedAtRow     time.Time
 	)
 
-	err := s.db.QueryRow(ctx, query, id).Scan(
+	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&sessionIDRow,
 		&userIDRow,
 		&authenticatedRow,
@@ -125,7 +121,7 @@ func (s *Store) Set(ctx context.Context, session session.SessionData) error {
 		Valid:  session.UserID != "",
 	}
 
-	_, err = s.db.Exec(
+	_, err = s.db.ExecContext(
 		ctx,
 		query,
 		session.ID,
@@ -146,7 +142,7 @@ func (s *Store) Set(ctx context.Context, session session.SessionData) error {
 func (s *Store) Delete(ctx context.Context, id string) error {
 	const query = "DELETE FROM sessions WHERE id = $1"
 
-	_, err := s.db.Exec(ctx, query, id)
+	_, err := s.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("delete failed: %w", err)
 	}
@@ -163,7 +159,7 @@ func (s *Store) cleanExpiredSessions(interval time.Duration) {
 	for range ticker.C {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
-		result, err := s.db.Exec(ctx, query)
+		result, err := s.db.ExecContext(ctx, query)
 
 		if err != nil {
 			s.log.Errorf("Failed to clean expired sessions: %v", err)
@@ -178,7 +174,7 @@ func (s *Store) cleanExpiredSessions(interval time.Duration) {
 	}
 }
 
-func New(db DB, log session.Logger, cleanerInterval time.Duration) session.Store {
+func New(db *sql.DB, log session.Logger, cleanerInterval time.Duration) session.Store {
 	s := &Store{
 		db:              db,
 		log:             log,
