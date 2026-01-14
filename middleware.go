@@ -6,130 +6,210 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 )
 
-func Middleware(opts ...func(*Options)) func(handler http.Handler) http.Handler {
+type Middleware struct {
+	log               Logger
+	store             Store
+	cookieName        string
+	secret            string
+	ttl               time.Duration
+	httpOnly          bool
+	secure            bool
+	sameSite          http.SameSite
+	saveUninitialized bool
+	autoRenew         bool
+	path              string
+	handleError       ErrorHandler
+}
+
+func (m *Middleware) Handler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, err := m.loadSession(r)
+
+		if err != nil {
+			m.log.Warnf("session id resolve failed: %v", err)
+		}
+
+		if session == nil && m.saveUninitialized {
+			session, err = NewSession(m.ttl)
+			if err != nil {
+				m.writeError(err, w, r)
+				return
+			}
+
+			m.log.Debugf("Anonymous session created: sessionID=%s",
+				session.ID[:8]+"...",
+			)
+		}
+
+		exist := session != nil
+		ctx := WithContext(r.Context(), session)
+
+		ww := m.writerWithCookie(w, session, err)
+
+		next.ServeHTTP(ww, r.WithContext(ctx))
+		shouldSave := exist && session.IsModified()
+		if shouldSave {
+			if err := m.store.Set(ctx, session.SessionData); err != nil {
+				m.log.Errorf("Failed to set session: %v", err)
+			}
+		}
+	})
+}
+
+func Handler(opts ...func(*Options)) func(handler http.Handler) http.Handler {
 	opt := &Options{
 		Logger:            &defaultLogger{},
 		Store:             NewMemoryStore(),
-		CookieName:        "sid",
+		SaveUninitialized: false,
+		AutoRenew:         false,
 		Secret:            "secret",
-		TTL:               time.Hour * 1,
+		CookieName:        "sid",
+		Path:              "/",
 		HTTPOnly:          true,
 		Secure:            false,
 		SameSite:          http.SameSiteNoneMode,
-		SaveUninitialized: false,
-		AutoRenew:         false,
+		TTL:               time.Hour * 1,
+		HandleError:       nil,
 	}
 
 	for _, o := range opts {
 		o(opt)
 	}
 
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			clearCookie, session, err := loadSession(r, opt)
-			if err != nil {
-				opt.Logger.Warnf("session id resolve failed: %v", err)
-			}
-
-			if session == nil && opt.SaveUninitialized {
-				session, err = NewSession(opt.TTL)
-				if err != nil {
-					opt.Logger.Errorf("Failed to create session: %v", err)
-					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-					return
-				}
-
-				opt.Logger.Debugf("Anonymous session created: sessionID=%s",
-					session.ID[:8]+"...",
-				)
-			}
-
-			exist := session != nil
-			ctx := WithContext(r.Context(), session)
-
-			ww := &responseWriter{
-				ResponseWriter: w,
-				opts:           opt,
-				session:        session,
-				sessionExists:  exist,
-				clearCookie:    clearCookie,
-			}
-
-			next.ServeHTTP(ww, r.WithContext(ctx))
-			shouldSave := exist && session.IsModified()
-			if shouldSave {
-				if err := opt.Store.Set(ctx, session.SessionData); err != nil {
-					opt.Logger.Errorf("Failed to set session: %v", err)
-				}
-			}
-		})
+	m := &Middleware{
+		log:               opt.Logger,
+		store:             opt.Store,
+		cookieName:        opt.CookieName,
+		secret:            opt.Secret,
+		ttl:               opt.TTL,
+		httpOnly:          opt.HTTPOnly,
+		secure:            opt.Secure,
+		sameSite:          opt.SameSite,
+		saveUninitialized: opt.SaveUninitialized,
+		autoRenew:         opt.AutoRenew,
+		path:              opt.Path,
+		handleError:       opt.HandleError,
 	}
+
+	return m.Handler
 }
 
-func loadSession(r *http.Request, opt *Options) (bool, *Session, error) {
+func HandlerWithOptions(opt Options) func(http.Handler) http.Handler {
+	return Handler(
+		WithLogger(opt.Logger),
+		WithStore(opt.Store),
+		WithCookieName(opt.CookieName),
+		WithSecret(opt.Secret),
+		WithTTL(opt.TTL),
+		WithHTTPOnly(opt.HTTPOnly),
+		WithSecure(opt.Secure),
+		WithSameSite(opt.SameSite),
+		WithSaveUninitialized(opt.SaveUninitialized),
+		WithAutoRenew(opt.AutoRenew),
+		WithPath(opt.Path),
+		WithHandleError(opt.HandleError),
+	)
+}
+
+func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Session, err error) *responseWriter {
+	ww := &responseWriter{
+		ResponseWriter: w,
+		statusWritten:  false,
+	}
+	clearCookie := err != nil && !errors.Is(err, ErrNoCookie)
+	exist := session != nil
+
+	if clearCookie && !exist {
+		ww.AddCookie(&http.Cookie{
+			Name:     m.cookieName,
+			Value:    "",
+			Path:     m.path,
+			Secure:   m.secure,
+			HttpOnly: m.httpOnly,
+			SameSite: m.sameSite,
+			MaxAge:   -1,
+			Expires:  time.Unix(0, 0),
+		})
+	}
+
+	if exist {
+		ww.AddCookie(&http.Cookie{
+			Name:     m.cookieName,
+			Value:    session.encodeSessionId(m.secret),
+			Path:     m.path,
+			Expires:  session.ExpiresAt,
+			MaxAge:   int(m.ttl.Seconds()),
+			Secure:   m.secure,
+			HttpOnly: m.httpOnly,
+			SameSite: m.sameSite,
+		})
+	}
+	return ww
+}
+
+func (m *Middleware) writeError(err error, w http.ResponseWriter, r *http.Request) {
+	m.log.Errorf("Failed to create session: %v", err)
+	if m.handleError != nil {
+		m.handleError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+}
+
+func (m *Middleware) loadSession(r *http.Request) (*Session, error) {
 	ctx := r.Context()
-	store := opt.Store
-	secret := opt.Secret
-	log := opt.Logger
-	ttl := opt.TTL
-
-	fmt.Println("Cookie header:", r.Header.Get("Cookie"))
-	fmt.Println("All headers:", r.Header)
-
-	cookie, err := r.Cookie(opt.CookieName)
+	cookie, err := r.Cookie(m.cookieName)
 	if err != nil {
 		if errors.Is(err, http.ErrNoCookie) {
-			return false, nil, nil
+			return nil, ErrNoCookie
 		}
-
-		log.Debugf("Cookie read error: cookieName=%s, error=%v, path=%s",
-			opt.CookieName,
+		m.log.Debugf("Cookie read error: cookieName=%s, error=%v, path=%s",
+			m.cookieName,
 			err,
 			r.URL.Path,
 		)
-		return false, nil, ErrInvalidCookie
+		return nil, ErrInvalidCookie
 	}
 
 	if cookie.Value == "" {
-		return true, nil, ErrInvalidCookie
+		return nil, ErrInvalidCookie
 	}
 
-	sessionID, err := unsignCookie(cookie.Value, secret)
+	sessionID, err := m.unsignCookie(cookie.Value)
 	if err != nil {
-		return true, nil, err
+		return nil, err
 	}
 
-	data, err := store.Get(ctx, sessionID)
+	data, err := m.store.Get(ctx, sessionID)
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 
 	session := NewSessionFromData(data)
 
 	if session.IsExpired() {
-		log.Warnf("session [%s] expired", session.ID)
+		m.log.Warnf("session [%s] expired", session.ID)
 		go func() {
-			if err := store.Delete(context.Background(), sessionID); err != nil {
-				log.Warnf("session delete session failed: %v", err)
+			if err := m.store.Delete(context.Background(), sessionID); err != nil {
+				m.log.Warnf("session delete session failed: %v", err)
 			}
 		}()
-		return true, nil, ErrSessionExpired
+		return nil, ErrSessionExpired
 	}
 
-	if opt.AutoRenew {
-		session.Renew(ttl)
+	if m.autoRenew {
+		session.Renew(m.ttl)
 	}
 
-	return false, session, nil
+	return session, nil
 }
 
-func unsignCookie(signedValue string, secret string) (string, error) {
+func (m *Middleware) unsignCookie(signedValue string) (string, error) {
 	if !strings.HasPrefix(signedValue, "s:") || len(signedValue) < 2 {
 		return "", ErrInvalidSignature
 	}
@@ -144,7 +224,7 @@ func unsignCookie(signedValue string, secret string) (string, error) {
 	sessionID := parts[0]
 	receivedSig := parts[1]
 
-	h := hmac.New(sha256.New, []byte(secret))
+	h := hmac.New(sha256.New, []byte(m.secret))
 	h.Write([]byte(sessionID))
 	expectedSig := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 

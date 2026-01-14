@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+type ErrorHandler func(w http.ResponseWriter, r *http.Request, status int, err error)
+
 type Options struct {
 	Logger            Logger
 	Store             Store
@@ -17,6 +19,7 @@ type Options struct {
 	Secure            bool
 	SameSite          http.SameSite
 	TTL               time.Duration
+	HandleError       ErrorHandler
 }
 
 func WithLogger(logger Logger) func(*Options) {
@@ -82,5 +85,11 @@ func WithAutoRenew(autoRenew bool) func(*Options) {
 func WithPath(path string) func(*Options) {
 	return func(o *Options) {
 		o.Path = path
+	}
+}
+
+func WithHandleError(handleError ErrorHandler) func(*Options) {
+	return func(o *Options) {
+		o.HandleError = handleError
 	}
 }

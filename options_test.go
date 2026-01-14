@@ -11,7 +11,7 @@ import (
 )
 
 func TestWithLogger(t *testing.T) {
-	t.Run("should set logger", func(t *testing.T) {
+	t.Run("should set log", func(t *testing.T) {
 		opts := &session.Options{}
 		logger := mocks.NewMockLogger()
 
