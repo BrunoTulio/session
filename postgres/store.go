@@ -37,8 +37,8 @@ type Store struct {
 	cleanerInterval time.Duration
 }
 type DB interface {
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryRow(ctx context.Context, query string, args ...any) *sql.Row
+	Exec(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 func (s *Store) Get(ctx context.Context, id string) (session.SessionData, error) {
@@ -62,7 +62,7 @@ func (s *Store) Get(ctx context.Context, id string) (session.SessionData, error)
 		updatedAtRow     time.Time
 	)
 
-	err := s.db.QueryRowContext(ctx, query, id).Scan(
+	err := s.db.QueryRow(ctx, query, id).Scan(
 		&sessionIDRow,
 		&userIDRow,
 		&authenticatedRow,
@@ -125,7 +125,7 @@ func (s *Store) Set(ctx context.Context, session session.SessionData) error {
 		Valid:  session.UserID != "",
 	}
 
-	_, err = s.db.ExecContext(
+	_, err = s.db.Exec(
 		ctx,
 		query,
 		session.ID,
@@ -146,7 +146,7 @@ func (s *Store) Set(ctx context.Context, session session.SessionData) error {
 func (s *Store) Delete(ctx context.Context, id string) error {
 	const query = "DELETE FROM sessions WHERE id = $1"
 
-	_, err := s.db.ExecContext(ctx, query, id)
+	_, err := s.db.Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("delete failed: %w", err)
 	}
@@ -163,7 +163,7 @@ func (s *Store) cleanExpiredSessions(interval time.Duration) {
 	for range ticker.C {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
-		result, err := s.db.ExecContext(ctx, query)
+		result, err := s.db.Exec(ctx, query)
 
 		if err != nil {
 			s.log.Errorf("Failed to clean expired sessions: %v", err)
