@@ -29,11 +29,9 @@ type Middleware struct {
 func (m *Middleware) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session, err := m.loadSession(r)
-
 		if err != nil {
 			m.log.Warnf("session id resolve failed: %v", err)
 		}
-
 		if session == nil && m.saveUninitialized {
 			session, err = NewSession(m.ttl)
 			if err != nil {
@@ -45,19 +43,10 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 				session.ID[:8]+"...",
 			)
 		}
-
-		exist := session != nil
 		ctx := WithContext(r.Context(), session)
-
 		ww := m.writerWithCookie(w, session, err)
-
 		next.ServeHTTP(ww, r.WithContext(ctx))
-		shouldSave := exist && session.IsModified()
-		if shouldSave {
-			if err := m.store.Set(ctx, session.SessionData); err != nil {
-				m.log.Errorf("Failed to set session: %v", err)
-			}
-		}
+		m.storeSession(ctx, session)
 	})
 }
 
@@ -114,6 +103,35 @@ func HandlerWithOptions(opt Options) func(http.Handler) http.Handler {
 		WithPath(opt.Path),
 		WithHandleError(opt.HandleError),
 	)
+}
+
+func (m *Middleware) storeSession(ctx context.Context, session *Session) {
+	shouldSave := session != nil && session.IsModified()
+
+	if !shouldSave {
+		return
+	}
+	m.cleanupOldSession(session)
+	if err := m.store.Set(ctx, session.SessionData); err != nil {
+		m.log.Errorf("Failed to set session: %v", err)
+	}
+}
+
+func (m *Middleware) cleanupOldSession(session *Session) {
+	if !session.HasOldSessionID() {
+		return
+	}
+
+	oldID := session.oldID
+	go func() {
+		ctx := context.Background()
+		if err := m.store.Delete(ctx, oldID); err != nil {
+			m.log.Warnf("Failed to delete old session %s: %v", oldID[:8]+"...", err)
+		} else {
+			m.log.Debugf("Old session deleted: %s", oldID[:8]+"...")
+		}
+	}()
+	session.ClearOldSessionID()
 }
 
 func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Session, err error) *responseWriter {

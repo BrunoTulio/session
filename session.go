@@ -18,6 +18,7 @@ const (
 type Session struct {
 	SessionData
 	modified bool
+	oldID    string
 	mu       sync.RWMutex
 }
 
@@ -121,6 +122,33 @@ func (s *Session) encodeSessionId(secret string) string {
 	h.Write([]byte(s.ID))
 	sig := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 	return "s:" + s.ID + "." + sig
+}
+
+func (s *Session) HasOldSessionID() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.oldID != ""
+}
+
+func (s *Session) Regenerate() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	newID, err := generateId()
+	if err != nil {
+		return fmt.Errorf("failed to generate new session ID: %w", err)
+	}
+	s.oldID = s.ID
+	s.ID = newID
+	s.modified = true
+
+	return nil
+}
+
+func (s *Session) ClearOldSessionID() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.oldID = ""
 }
 
 func generateId() (string, error) {
