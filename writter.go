@@ -6,7 +6,7 @@ import (
 
 type responseWriter struct {
 	http.ResponseWriter
-	cookies       []*http.Cookie
+	cookie        *http.Cookie
 	statusWritten bool
 }
 
@@ -15,8 +15,8 @@ func (rw *responseWriter) WriteHeader(code int) {
 		return
 	}
 
-	for _, c := range rw.cookies {
-		http.SetCookie(rw, c)
+	if rw.cookie != nil {
+		http.SetCookie(rw, rw.cookie)
 	}
 
 	rw.statusWritten = true
@@ -24,7 +24,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 }
 
 func (rw *responseWriter) AddCookie(c *http.Cookie) {
-	rw.cookies = append(rw.cookies, c)
+	rw.cookie = c
 }
 
 func (rw *responseWriter) Write(b []byte) (int, error) {

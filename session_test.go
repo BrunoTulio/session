@@ -11,9 +11,8 @@ import (
 
 func TestSession_New(t *testing.T) {
 	t.Run("should new session modified", func(t *testing.T) {
-		s, err := NewSession(time.Hour * 24)
+		s := NewSession(time.Hour * 24)
 
-		assert.NoError(t, err)
 		assert.NotNil(t, s)
 		assert.True(t, s.modified)
 		assert.True(t, s.IsModified())
@@ -23,9 +22,8 @@ func TestSession_New(t *testing.T) {
 		ids := make(map[string]bool)
 		interactions := 1000
 		for range interactions {
-			s, err := NewSession(time.Hour * 24)
+			s := NewSession(time.Hour * 24)
 
-			assert.NoError(t, err)
 			assert.NotNil(t, s)
 
 			if ids[s.ID] {
@@ -40,11 +38,10 @@ func TestSession_New(t *testing.T) {
 
 func TestSession_GetSessionData(t *testing.T) {
 	t.Run("should get session data", func(t *testing.T) {
-		s, err := NewSession(time.Hour * 24)
+		s := NewSession(time.Hour * 24)
 		s.Set("value", "value")
 		s.Authenticate("123")
 
-		assert.NoError(t, err)
 		assert.NotNil(t, s)
 
 		data := s.GetSessionData()
@@ -58,8 +55,7 @@ func TestSession_GetSessionData(t *testing.T) {
 
 func TestSession_NewFromData(t *testing.T) {
 	t.Run("should new session from data", func(t *testing.T) {
-		data, err := NewSessionData(time.Hour * 24)
-		assert.NoError(t, err)
+		data := NewSessionData(time.Hour * 24)
 		assert.NotNil(t, data)
 
 		s := NewSessionFromData(data)
@@ -82,8 +78,7 @@ func TestSession_NewFromData(t *testing.T) {
 
 func TestSession_GetAndSet(t *testing.T) {
 	t.Run("should get and set session", func(t *testing.T) {
-		s, err := NewSession(time.Hour * 24)
-		assert.NoError(t, err)
+		s := NewSession(time.Hour * 24)
 		assert.NotNil(t, s)
 
 		s.Set("user_id", "123")
@@ -104,7 +99,7 @@ func TestSession_GetAndSet(t *testing.T) {
 	})
 
 	t.Run("should return false there is no key", func(t *testing.T) {
-		data, _ := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 		val, ok := data.Get("user_id")
 		assert.False(t, ok)
 		assert.Nil(t, val)
@@ -113,7 +108,7 @@ func TestSession_GetAndSet(t *testing.T) {
 	t.Run("should update UpdatedAt on Set", func(t *testing.T) {
 		timeBeforeUpdate := time.Now().AddDate(-1, 0, 0)
 		now = func() time.Time { return timeBeforeUpdate }
-		data, _ := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 
 		assert.Equal(t, timeBeforeUpdate, data.UpdatedAt)
 
@@ -128,7 +123,7 @@ func TestSession_GetAndSet(t *testing.T) {
 
 func TestSession_Delete(t *testing.T) {
 	t.Run("should delete success", func(t *testing.T) {
-		data, _ := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 
 		data.Set("user_id", "123")
 		val, ok := data.Get("user_id")
@@ -144,7 +139,7 @@ func TestSession_Delete(t *testing.T) {
 	})
 
 	t.Run("should update modified on Delete", func(t *testing.T) {
-		data, _ := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 		assert.True(t, data.modified)
 		assert.True(t, data.IsModified())
 
@@ -164,7 +159,7 @@ func TestSession_Delete(t *testing.T) {
 	t.Run("should update UpdatedAt on Delete", func(t *testing.T) {
 		timeBeforeUpdate := time.Now().AddDate(-1, 0, 0)
 		now = func() time.Time { return timeBeforeUpdate }
-		data, _ := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 		assert.Equal(t, timeBeforeUpdate, data.UpdatedAt)
 		timeAfterUpdate := time.Now()
 		now = func() time.Time { return timeAfterUpdate }
@@ -185,7 +180,7 @@ func TestSession_Delete(t *testing.T) {
 
 func TestSession_Authenticate(t *testing.T) {
 	t.Run("should authenticate", func(t *testing.T) {
-		data, _ := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 
 		assert.False(t, data.Authenticated)
 		assert.Empty(t, data.UserID)
@@ -200,7 +195,7 @@ func TestSession_Authenticate(t *testing.T) {
 		timeBeforeUpdate := time.Now().AddDate(-1, 0, 0)
 		now = func() time.Time { return timeBeforeUpdate }
 
-		data, _ := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 
 		assert.False(t, data.Authenticated)
 		assert.Empty(t, data.UserID)
@@ -216,7 +211,7 @@ func TestSession_Authenticate(t *testing.T) {
 	})
 
 	t.Run("should update modified on Authenticate", func(t *testing.T) {
-		s, _ := NewSession(time.Hour * 24)
+		s := NewSession(time.Hour * 24)
 		assert.True(t, s.modified)
 		assert.True(t, s.IsModified())
 
@@ -232,7 +227,7 @@ func TestSession_Authenticate(t *testing.T) {
 
 func TestSession_Unauthenticate(t *testing.T) {
 	t.Run("should unauthenticate", func(t *testing.T) {
-		data, _ := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 		assert.False(t, data.Authenticated)
 		assert.Empty(t, data.UserID)
 
@@ -250,7 +245,7 @@ func TestSession_Unauthenticate(t *testing.T) {
 		timeBeforeUpdate := time.Now().AddDate(-1, 0, 0)
 		now = func() time.Time { return timeBeforeUpdate }
 
-		data, _ := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 		assert.False(t, data.Authenticated)
 		assert.Empty(t, data.UserID)
 		assert.Equal(t, timeBeforeUpdate, data.UpdatedAt)
@@ -270,7 +265,7 @@ func TestSession_Unauthenticate(t *testing.T) {
 	})
 
 	t.Run("should update modified on Unauthenticate", func(t *testing.T) {
-		s, _ := NewSession(time.Hour * 24)
+		s := NewSession(time.Hour * 24)
 		assert.True(t, s.modified)
 		assert.True(t, s.IsModified())
 
@@ -296,7 +291,7 @@ func TestSession_Renew(t *testing.T) {
 	t.Run("should renew", func(t *testing.T) {
 		timeDefault := time.Now().AddDate(0, 0, -1)
 		now = func() time.Time { return timeDefault }
-		data, _ := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 		expiredExpected := timeDefault.Add(time.Hour * 24)
 		expiredOld := data.ExpiresAt
 
@@ -316,7 +311,7 @@ func TestSession_Renew(t *testing.T) {
 		timeBeforeUpdate := time.Now().AddDate(-1, 0, 0)
 		now = func() time.Time { return timeBeforeUpdate }
 
-		data, _ := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 		assert.Equal(t, timeBeforeUpdate, data.UpdatedAt)
 		timeAfterUpdate := time.Now()
 		now = func() time.Time { return timeAfterUpdate }
@@ -326,7 +321,7 @@ func TestSession_Renew(t *testing.T) {
 	})
 
 	t.Run("should update modified on Renew", func(t *testing.T) {
-		s, _ := NewSession(time.Hour * 24)
+		s := NewSession(time.Hour * 24)
 		assert.True(t, s.modified)
 		assert.True(t, s.IsModified())
 
@@ -343,10 +338,9 @@ func TestSession_Renew(t *testing.T) {
 func TestSession_IsExpired(t *testing.T) {
 	t.Run("should return true expired", func(t *testing.T) {
 		now = func() time.Time { return time.Now().AddDate(-1, 0, 0) }
-		data, err := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 		now = func() time.Time { return time.Now() }
 
-		assert.NoError(t, err)
 		assert.NotNil(t, data)
 		isExpired := data.IsExpired()
 
@@ -354,9 +348,8 @@ func TestSession_IsExpired(t *testing.T) {
 	})
 
 	t.Run("should return false not expired", func(t *testing.T) {
-		data, err := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 
-		assert.NoError(t, err)
 		assert.NotNil(t, data)
 		isExpired := data.IsExpired()
 
@@ -365,10 +358,9 @@ func TestSession_IsExpired(t *testing.T) {
 
 	t.Run("should return true it expires at the exact time", func(t *testing.T) {
 		now = func() time.Time { return time.Now().Add(-24 * time.Hour) }
-		data, err := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 		now = func() time.Time { return time.Now() }
 
-		assert.NoError(t, err)
 		assert.NotNil(t, data)
 		isExpired := data.IsExpired()
 
@@ -377,10 +369,9 @@ func TestSession_IsExpired(t *testing.T) {
 
 	t.Run("should return false with one minute left to expire", func(t *testing.T) {
 		now = func() time.Time { return time.Now().Add(-(23*time.Hour + 9*time.Minute)) }
-		data, err := NewSession(time.Hour * 24)
+		data := NewSession(time.Hour * 24)
 		now = func() time.Time { return time.Now() }
 
-		assert.NoError(t, err)
 		assert.NotNil(t, data)
 		isExpired := data.IsExpired()
 
@@ -390,8 +381,7 @@ func TestSession_IsExpired(t *testing.T) {
 
 func TestSession_MarkClean(t *testing.T) {
 	t.Run("should mark clean", func(t *testing.T) {
-		s, err := NewSession(time.Hour * 24)
-		assert.NoError(t, err)
+		s := NewSession(time.Hour * 24)
 		assert.NotNil(t, s)
 
 		assert.True(t, s.IsModified())
@@ -405,8 +395,7 @@ func TestSession_MarkClean(t *testing.T) {
 
 func TestSession_IsAuthenticated(t *testing.T) {
 	t.Run("should return true authenticated", func(t *testing.T) {
-		s, err := NewSession(time.Hour * 24)
-		assert.NoError(t, err)
+		s := NewSession(time.Hour * 24)
 		assert.NotNil(t, s)
 
 		assert.False(t, s.IsAuthenticated())
@@ -417,7 +406,7 @@ func TestSession_IsAuthenticated(t *testing.T) {
 
 func TestSession_Concurrent(t *testing.T) {
 	t.Run("should handle concurrent writes without data loss", func(t *testing.T) {
-		sess, _ := NewSession(1 * time.Hour)
+		sess := NewSession(1 * time.Hour)
 
 		var wg sync.WaitGroup
 		goroutines := 10
@@ -458,7 +447,7 @@ func TestSession_Concurrent(t *testing.T) {
 	})
 
 	t.Run("should handle concurrent reads and writes", func(t *testing.T) {
-		sess, _ := NewSession(1 * time.Hour)
+		sess := NewSession(1 * time.Hour)
 
 		for i := 0; i < 50; i++ {
 			sess.Set(fmt.Sprintf("key_%d", i), i)
@@ -505,7 +494,7 @@ func TestSession_Concurrent(t *testing.T) {
 	})
 
 	t.Run("should correctly track modified flag under concurrency", func(t *testing.T) {
-		sess, _ := NewSession(1 * time.Hour)
+		sess := NewSession(1 * time.Hour)
 		sess.MarkClean()
 
 		var wg sync.WaitGroup
@@ -531,8 +520,7 @@ func TestSession_GenerateId(t *testing.T) {
 		ids := make(map[string]bool)
 		iterations := 1000
 		for range iterations {
-			id, err := generateId()
-			assert.NoError(t, err)
+			id := generateId()
 			if _, ok := ids[id]; ok {
 				assert.Fail(t, "duplicate id")
 			}

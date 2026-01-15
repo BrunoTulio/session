@@ -12,11 +12,9 @@ type SessionData struct {
 	UserID        string         `json:"user_id"`
 }
 
-func NewSessionData(ttl time.Duration) (SessionData, error) {
-	id, err := generateId()
-	if err != nil {
-		return SessionData{}, err
-	}
+func NewSessionData(ttl time.Duration) SessionData {
+	id := generateId()
+
 	t := now()
 	return SessionData{
 		ID:        id,
@@ -24,7 +22,7 @@ func NewSessionData(ttl time.Duration) (SessionData, error) {
 		UpdatedAt: t,
 		ExpiresAt: t.Add(ttl),
 		Data:      make(map[string]any),
-	}, nil
+	}
 }
 
 func (s *SessionData) Get(key string) (any, bool) {

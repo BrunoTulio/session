@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -22,16 +21,13 @@ type Session struct {
 	mu       sync.RWMutex
 }
 
-func NewSession(ttl time.Duration) (*Session, error) {
-	data, err := NewSessionData(ttl)
-	if err != nil {
-		return nil, err
-	}
+func NewSession(ttl time.Duration) *Session {
+	data := NewSessionData(ttl)
 
 	return &Session{
 		SessionData: data,
 		modified:    true,
-	}, nil
+	}
 }
 
 func (s *Session) GetSessionData() SessionData {
@@ -56,18 +52,20 @@ func (s *Session) Get(key string) (any, bool) {
 	return s.SessionData.Get(key)
 }
 
-func (s *Session) Set(key string, value any) {
+func (s *Session) Set(key string, value any) *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.modified = true
 	s.SessionData.Set(key, value)
+	return s
 }
 
-func (s *Session) Delete(key string) {
+func (s *Session) Delete(key string) *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.modified = true
 	s.SessionData.Delete(key)
+	return s
 }
 
 func (s *Session) IsModified() bool {
@@ -76,11 +74,12 @@ func (s *Session) IsModified() bool {
 	return s.modified
 }
 
-func (s *Session) MarkClean() {
+func (s *Session) MarkClean() *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.modified = false
+	return s
 }
 
 func (s *Session) IsExpired() bool {
@@ -89,11 +88,13 @@ func (s *Session) IsExpired() bool {
 	return s.SessionData.IsExpired()
 }
 
-func (s *Session) Renew(ttl time.Duration) {
+func (s *Session) Renew(ttl time.Duration) *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.modified = true
 	s.SessionData.Renew(ttl)
+
+	return s
 }
 
 func (s *Session) IsAuthenticated() bool {
@@ -103,18 +104,21 @@ func (s *Session) IsAuthenticated() bool {
 	return s.Authenticated
 }
 
-func (s *Session) Authenticate(userID string) {
+func (s *Session) Authenticate(userID string) *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.modified = true
 	s.SessionData.Authenticate(userID)
+
+	return s
 }
 
-func (s *Session) Unauthenticate() {
+func (s *Session) Unauthenticate() *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.modified = true
 	s.SessionData.Unauthenticate()
+	return s
 }
 
 func (s *Session) encodeSessionId(secret string) string {
@@ -124,38 +128,43 @@ func (s *Session) encodeSessionId(secret string) string {
 	return "s:" + s.ID + "." + sig
 }
 
-func (s *Session) HasOldSessionID() bool {
+func (s *Session) HasOldID() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.oldID != ""
 }
 
-func (s *Session) Regenerate() error {
+func (s *Session) Regenerate() *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	newID, err := generateId()
-	if err != nil {
-		return fmt.Errorf("failed to generate new session ID: %w", err)
-	}
+	newID := generateId()
 	s.oldID = s.ID
 	s.ID = newID
 	s.modified = true
-
-	return nil
+	return s
 }
 
-func (s *Session) ClearOldSessionID() {
+func (s *Session) clearOldID() *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.oldID = ""
+	return s
 }
 
-func generateId() (string, error) {
-	bytes := make([]byte, sessionIDBytes)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("%w: %v", ErrSessionIDGeneration, err)
-	}
+func (s *Session) GetOldID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.oldID
+}
 
-	return hex.EncodeToString(bytes), nil
+// generateID generates a cryptographically secure session ID.
+//
+// In Go 1.24+, crypto/rand.Read never returns an error. If random number
+// generation fails, the program crashes via fatal() as it's unsafe to
+// continue without secure randomness. See: https://go.dev/issue/66821
+func generateId() string {
+	bytes := make([]byte, sessionIDBytes)
+	_, _ = rand.Read(bytes)
+	return hex.EncodeToString(bytes)
 }

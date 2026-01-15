@@ -9,8 +9,7 @@ import (
 
 func TestSessionData_New(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		data, err := NewSessionData(1 * time.Hour)
-		assert.NoError(t, err)
+		data := NewSessionData(1 * time.Hour)
 		assert.NotNil(t, data)
 	})
 }
@@ -21,8 +20,7 @@ func TestSessionData_UniqueIds(t *testing.T) {
 		iterations := 1000
 
 		for i := 0; i < iterations; i++ {
-			data, err := NewSessionData(1 * time.Hour)
-			assert.NoError(t, err)
+			data := NewSessionData(1 * time.Hour)
 
 			if ids[data.ID] {
 				t.Fatalf("Duplicate ID found: %s", data.ID)
@@ -36,7 +34,7 @@ func TestSessionData_UniqueIds(t *testing.T) {
 
 func TestSessionData_GetAndSet(t *testing.T) {
 	t.Run("should set and get data", func(t *testing.T) {
-		data, _ := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 
 		data.Set("user_id", "123")
 		data.Set("role", "admin")
@@ -56,7 +54,7 @@ func TestSessionData_GetAndSet(t *testing.T) {
 	})
 
 	t.Run("should return false there is no key", func(t *testing.T) {
-		data, _ := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 		val, ok := data.Get("user_id")
 		assert.False(t, ok)
 		assert.Nil(t, val)
@@ -65,7 +63,7 @@ func TestSessionData_GetAndSet(t *testing.T) {
 	t.Run("should update UpdatedAt on Set", func(t *testing.T) {
 		timeBeforeUpdate := time.Now().AddDate(-1, 0, 0)
 		now = func() time.Time { return timeBeforeUpdate }
-		data, _ := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 
 		assert.Equal(t, timeBeforeUpdate, data.UpdatedAt)
 
@@ -80,7 +78,7 @@ func TestSessionData_GetAndSet(t *testing.T) {
 
 func TestSessionData_Delete(t *testing.T) {
 	t.Run("should delete success", func(t *testing.T) {
-		data, _ := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 
 		data.Set("user_id", "123")
 		val, ok := data.Get("user_id")
@@ -98,7 +96,7 @@ func TestSessionData_Delete(t *testing.T) {
 	t.Run("should update UpdatedAt on Delete", func(t *testing.T) {
 		timeBeforeUpdate := time.Now().AddDate(-1, 0, 0)
 		now = func() time.Time { return timeBeforeUpdate }
-		data, _ := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 		assert.Equal(t, timeBeforeUpdate, data.UpdatedAt)
 		timeAfterUpdate := time.Now()
 		now = func() time.Time { return timeAfterUpdate }
@@ -119,7 +117,7 @@ func TestSessionData_Delete(t *testing.T) {
 
 func TestSessionData_Authenticate(t *testing.T) {
 	t.Run("should authenticate", func(t *testing.T) {
-		data, _ := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 
 		assert.False(t, data.Authenticated)
 		assert.Empty(t, data.UserID)
@@ -134,7 +132,7 @@ func TestSessionData_Authenticate(t *testing.T) {
 		timeBeforeUpdate := time.Now().AddDate(-1, 0, 0)
 		now = func() time.Time { return timeBeforeUpdate }
 
-		data, _ := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 
 		assert.False(t, data.Authenticated)
 		assert.Empty(t, data.UserID)
@@ -152,7 +150,7 @@ func TestSessionData_Authenticate(t *testing.T) {
 
 func TestSessionData_Unauthenticate(t *testing.T) {
 	t.Run("should unauthenticate", func(t *testing.T) {
-		data, _ := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 		assert.False(t, data.Authenticated)
 		assert.Empty(t, data.UserID)
 
@@ -170,7 +168,7 @@ func TestSessionData_Unauthenticate(t *testing.T) {
 		timeBeforeUpdate := time.Now().AddDate(-1, 0, 0)
 		now = func() time.Time { return timeBeforeUpdate }
 
-		data, _ := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 		assert.False(t, data.Authenticated)
 		assert.Empty(t, data.UserID)
 		assert.Equal(t, timeBeforeUpdate, data.UpdatedAt)
@@ -194,7 +192,7 @@ func TestSessionData_Renew(t *testing.T) {
 	t.Run("should renew", func(t *testing.T) {
 		timeDefault := time.Now().AddDate(0, 0, -1)
 		now = func() time.Time { return timeDefault }
-		data, _ := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 		expiredExpected := timeDefault.Add(time.Hour * 24)
 		expiredOld := data.ExpiresAt
 
@@ -214,7 +212,7 @@ func TestSessionData_Renew(t *testing.T) {
 		timeBeforeUpdate := time.Now().AddDate(-1, 0, 0)
 		now = func() time.Time { return timeBeforeUpdate }
 
-		data, _ := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 		assert.Equal(t, timeBeforeUpdate, data.UpdatedAt)
 		timeAfterUpdate := time.Now()
 		now = func() time.Time { return timeAfterUpdate }
@@ -227,10 +225,9 @@ func TestSessionData_Renew(t *testing.T) {
 func TestSessionData_IsExpired(t *testing.T) {
 	t.Run("should return true expired", func(t *testing.T) {
 		now = func() time.Time { return time.Now().AddDate(-1, 0, 0) }
-		data, err := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 		now = func() time.Time { return time.Now() }
 
-		assert.NoError(t, err)
 		assert.NotNil(t, data)
 		isExpired := data.IsExpired()
 
@@ -238,9 +235,7 @@ func TestSessionData_IsExpired(t *testing.T) {
 	})
 
 	t.Run("should return false not expired", func(t *testing.T) {
-		data, err := NewSessionData(time.Hour * 24)
-
-		assert.NoError(t, err)
+		data := NewSessionData(time.Hour * 24)
 		assert.NotNil(t, data)
 		isExpired := data.IsExpired()
 
@@ -249,10 +244,9 @@ func TestSessionData_IsExpired(t *testing.T) {
 
 	t.Run("should return true it expires at the exact time", func(t *testing.T) {
 		now = func() time.Time { return time.Now().Add(-24 * time.Hour) }
-		data, err := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 		now = func() time.Time { return time.Now() }
 
-		assert.NoError(t, err)
 		assert.NotNil(t, data)
 		isExpired := data.IsExpired()
 
@@ -261,10 +255,8 @@ func TestSessionData_IsExpired(t *testing.T) {
 
 	t.Run("should return false with one minute left to expire", func(t *testing.T) {
 		now = func() time.Time { return time.Now().Add(-(23*time.Hour + 9*time.Minute)) }
-		data, err := NewSessionData(time.Hour * 24)
+		data := NewSessionData(time.Hour * 24)
 		now = func() time.Time { return time.Now() }
-
-		assert.NoError(t, err)
 		assert.NotNil(t, data)
 		isExpired := data.IsExpired()
 

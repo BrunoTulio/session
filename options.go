@@ -19,7 +19,7 @@ type Options struct {
 	Secure            bool
 	SameSite          http.SameSite
 	TTL               time.Duration
-	HandleError       ErrorHandler
+	//HandleError       ErrorHandler
 }
 
 func WithLogger(logger Logger) func(*Options) {
@@ -88,8 +88,8 @@ func WithPath(path string) func(*Options) {
 	}
 }
 
-func WithHandleError(handleError ErrorHandler) func(*Options) {
-	return func(o *Options) {
-		o.HandleError = handleError
-	}
-}
+//func WithHandleError(handleError ErrorHandler) func(*Options) {
+//	return func(o *Options) {
+//		o.HandleError = handleError
+//	}
+//}

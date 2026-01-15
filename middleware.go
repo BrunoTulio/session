@@ -23,7 +23,7 @@ type Middleware struct {
 	saveUninitialized bool
 	autoRenew         bool
 	path              string
-	handleError       ErrorHandler
+	//handleError       ErrorHandler
 }
 
 func (m *Middleware) Handler(next http.Handler) http.Handler {
@@ -33,12 +33,7 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 			m.log.Warnf("session id resolve failed: %v", err)
 		}
 		if session == nil && m.saveUninitialized {
-			session, err = NewSession(m.ttl)
-			if err != nil {
-				m.writeError(err, w, r)
-				return
-			}
-
+			session = NewSession(m.ttl)
 			m.log.Debugf("Anonymous session created: sessionID=%s",
 				session.ID[:8]+"...",
 			)
@@ -63,7 +58,7 @@ func Handler(opts ...func(*Options)) func(handler http.Handler) http.Handler {
 		Secure:            false,
 		SameSite:          http.SameSiteNoneMode,
 		TTL:               time.Hour * 1,
-		HandleError:       nil,
+		//HandleError:       nil,
 	}
 
 	for _, o := range opts {
@@ -82,7 +77,7 @@ func Handler(opts ...func(*Options)) func(handler http.Handler) http.Handler {
 		saveUninitialized: opt.SaveUninitialized,
 		autoRenew:         opt.AutoRenew,
 		path:              opt.Path,
-		handleError:       opt.HandleError,
+		//handleError:       opt.HandleError,
 	}
 
 	return m.Handler
@@ -101,7 +96,7 @@ func HandlerWithOptions(opt Options) func(http.Handler) http.Handler {
 		WithSaveUninitialized(opt.SaveUninitialized),
 		WithAutoRenew(opt.AutoRenew),
 		WithPath(opt.Path),
-		WithHandleError(opt.HandleError),
+		//WithHandleError(opt.HandleError),
 	)
 }
 
@@ -118,7 +113,7 @@ func (m *Middleware) storeSession(ctx context.Context, session *Session) {
 }
 
 func (m *Middleware) cleanupOldSession(session *Session) {
-	if !session.HasOldSessionID() {
+	if !session.HasOldID() {
 		return
 	}
 
@@ -131,7 +126,7 @@ func (m *Middleware) cleanupOldSession(session *Session) {
 			m.log.Debugf("Old session deleted: %s", oldID[:8]+"...")
 		}
 	}()
-	session.ClearOldSessionID()
+	session.clearOldID()
 }
 
 func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Session, err error) *responseWriter {
@@ -170,14 +165,14 @@ func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Session, e
 	return ww
 }
 
-func (m *Middleware) writeError(err error, w http.ResponseWriter, r *http.Request) {
-	m.log.Errorf("Failed to create session: %v", err)
-	if m.handleError != nil {
-		m.handleError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-}
+//func (m *Middleware) writeError(err error, w http.ResponseWriter, r *http.Request) {
+//	m.log.Errorf("Failed to create session: %v", err)
+//	if m.handleError != nil {
+//		m.handleError(w, r, http.StatusInternalServerError, err)
+//		return
+//	}
+//	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+//}
 
 func (m *Middleware) loadSession(r *http.Request) (*Session, error) {
 	ctx := r.Context()
