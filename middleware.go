@@ -40,7 +40,7 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 		}
 
 		ctx := WithContext(r.Context(), session)
-		ww := m.writerWithCookie(w, session, err)
+		ww := m.writer(w, session, err)
 		next.ServeHTTP(ww, r.WithContext(ctx))
 		m.storeSession(ctx, session)
 	})
@@ -130,41 +130,49 @@ func (m *Middleware) cleanupOldSession(session *Session) {
 	session.clearOldID()
 }
 
-func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Session, err error) *responseWriter {
+func (m *Middleware) writer(w http.ResponseWriter, session *Session, err error) *responseWriter {
 	ww := &responseWriter{
 		ResponseWriter: w,
 		statusWritten:  false,
 		before: func() {
 			if err != nil && !errors.Is(err, ErrNoCookie) {
-				http.SetCookie(w, &http.Cookie{
-					Name:     m.cookieName,
-					Value:    "",
-					Path:     m.path,
-					Secure:   m.secure,
-					HttpOnly: m.httpOnly,
-					SameSite: m.sameSite,
-					MaxAge:   -1,
-					Expires:  time.Unix(0, 0),
-				})
+				m.setCookie(w)
 				return
 			}
 
 			if session != nil {
-				http.SetCookie(w, &http.Cookie{
-					Name:     m.cookieName,
-					Value:    session.SignedID(m.secret),
-					Path:     m.path,
-					Expires:  session.ExpiresAt,
-					MaxAge:   int(m.ttl.Seconds()),
-					Secure:   m.secure,
-					HttpOnly: m.httpOnly,
-					SameSite: m.sameSite,
-				})
+				m.cleanCookie(w, session)
 			}
 		},
 	}
 
 	return ww
+}
+
+func (m *Middleware) cleanCookie(w http.ResponseWriter, session *Session) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     m.cookieName,
+		Value:    session.SignedID(m.secret),
+		Path:     m.path,
+		Expires:  session.ExpiresAt,
+		MaxAge:   int(m.ttl.Seconds()),
+		Secure:   m.secure,
+		HttpOnly: m.httpOnly,
+		SameSite: m.sameSite,
+	})
+}
+
+func (m *Middleware) setCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     m.cookieName,
+		Value:    "",
+		Path:     m.path,
+		Secure:   m.secure,
+		HttpOnly: m.httpOnly,
+		SameSite: m.sameSite,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	})
 }
 
 //func (m *Middleware) writeError(err error, w http.ResponseWriter, r *http.Request) {
