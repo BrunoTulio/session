@@ -38,9 +38,9 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 				session.ID[:8]+"...",
 			)
 		}
-		sessContext := newContext(session, m.secret)
-		ctx := WithContext(r.Context(), sessContext)
-		ww := m.writerWithCookie(w, sessContext, err)
+
+		ctx := WithContext(r.Context(), session)
+		ww := m.writerWithCookie(w, session, err)
 		next.ServeHTTP(ww, r.WithContext(ctx))
 		m.storeSession(ctx, session)
 	})
@@ -130,7 +130,7 @@ func (m *Middleware) cleanupOldSession(session *Session) {
 	session.clearOldID()
 }
 
-func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Context, err error) *responseWriter {
+func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Session, err error) *responseWriter {
 	ww := &responseWriter{
 		ResponseWriter: w,
 		statusWritten:  false,
@@ -154,7 +154,7 @@ func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Context, e
 	if exist {
 		ww.AddCookie(&http.Cookie{
 			Name:     m.cookieName,
-			Value:    session.Token,
+			Value:    session.SignedID(m.secret),
 			Path:     m.path,
 			Expires:  session.ExpiresAt,
 			MaxAge:   int(m.ttl.Seconds()),

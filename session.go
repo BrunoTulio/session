@@ -1,6 +1,9 @@
 package session
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"sync"
 	"time"
 )
@@ -14,8 +17,6 @@ type Session struct {
 	modified bool
 	oldID    string
 	mu       sync.RWMutex
-
-	onHookRegenerate func(newId string)
 }
 
 func NewSession(ttl time.Duration) *Session {
@@ -132,11 +133,18 @@ func (s *Session) Regenerate() *Session {
 	s.oldID = s.ID
 	s.ID = newID
 	s.modified = true
-
-	if s.onHookRegenerate != nil {
-		s.onHookRegenerate(newID)
-	}
 	return s
+}
+func (s *Session) SignedID(secret string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return encodeSessionId(s.ID, secret)
+}
+
+func (s *Session) GetOldID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.oldID
 }
 
 func (s *Session) clearOldID() *Session {
@@ -146,8 +154,9 @@ func (s *Session) clearOldID() *Session {
 	return s
 }
 
-func (s *Session) GetOldID() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.oldID
+func encodeSessionId(id string, secret string) string {
+	h := hmac.New(sha256.New, []byte(secret))
+	h.Write([]byte(id))
+	sig := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+	return "s:" + id + "." + sig
 }
