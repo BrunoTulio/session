@@ -14,6 +14,8 @@ type Session struct {
 	modified bool
 	oldID    string
 	mu       sync.RWMutex
+
+	onHookRegenerate func(newId string)
 }
 
 func NewSession(ttl time.Duration) *Session {
@@ -130,6 +132,10 @@ func (s *Session) Regenerate() *Session {
 	s.oldID = s.ID
 	s.ID = newID
 	s.modified = true
+
+	if s.onHookRegenerate != nil {
+		s.onHookRegenerate(newID)
+	}
 	return s
 }
 

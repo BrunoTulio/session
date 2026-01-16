@@ -38,15 +38,7 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 				session.ID[:8]+"...",
 			)
 		}
-		var token string
-		if session != nil {
-			token = encodeSessionId(session.ID, m.secret)
-		}
-
-		sessContext := &Context{
-			Session: session,
-			Token:   token,
-		}
+		sessContext := newContext(session, m.secret)
 		ctx := WithContext(r.Context(), sessContext)
 		ww := m.writerWithCookie(w, sessContext, err)
 		next.ServeHTTP(ww, r.WithContext(ctx))
@@ -255,11 +247,4 @@ func (m *Middleware) unsignCookie(signedValue string) (string, error) {
 	}
 
 	return sessionID, nil
-}
-
-func encodeSessionId(id string, secret string) string {
-	h := hmac.New(sha256.New, []byte(secret))
-	h.Write([]byte(id))
-	sig := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
-	return "s:" + id + "." + sig
 }
