@@ -40,7 +40,7 @@ type Store struct {
 func (s *Store) Get(ctx context.Context, id string) (session.SessionData, error) {
 	const query = `  SELECT id, 
            user_id,
-          authenticatedRow,
+          authenticated,
     data ,
     expires_at ,
     created_at ,
