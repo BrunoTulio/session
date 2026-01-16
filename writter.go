@@ -2,12 +2,14 @@ package session
 
 import (
 	"net/http"
+	"sync"
 )
 
 type responseWriter struct {
 	http.ResponseWriter
-	cookie        *http.Cookie
 	statusWritten bool
+	once          sync.Once
+	before        func()
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
@@ -15,16 +17,12 @@ func (rw *responseWriter) WriteHeader(code int) {
 		return
 	}
 
-	if rw.cookie != nil {
-		http.SetCookie(rw, rw.cookie)
+	if rw.before != nil {
+		rw.once.Do(rw.before)
 	}
 
 	rw.statusWritten = true
 	rw.ResponseWriter.WriteHeader(code)
-}
-
-func (rw *responseWriter) AddCookie(c *http.Cookie) {
-	rw.cookie = c
 }
 
 func (rw *responseWriter) Write(b []byte) (int, error) {

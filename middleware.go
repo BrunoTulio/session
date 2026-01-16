@@ -134,35 +134,36 @@ func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Session, e
 	ww := &responseWriter{
 		ResponseWriter: w,
 		statusWritten:  false,
-	}
-	clearCookie := err != nil && !errors.Is(err, ErrNoCookie)
-	exist := session != nil
+		before: func() {
+			if err != nil && !errors.Is(err, ErrNoCookie) {
+				http.SetCookie(w, &http.Cookie{
+					Name:     m.cookieName,
+					Value:    "",
+					Path:     m.path,
+					Secure:   m.secure,
+					HttpOnly: m.httpOnly,
+					SameSite: m.sameSite,
+					MaxAge:   -1,
+					Expires:  time.Unix(0, 0),
+				})
+				return
+			}
 
-	if clearCookie && !exist {
-		ww.AddCookie(&http.Cookie{
-			Name:     m.cookieName,
-			Value:    "",
-			Path:     m.path,
-			Secure:   m.secure,
-			HttpOnly: m.httpOnly,
-			SameSite: m.sameSite,
-			MaxAge:   -1,
-			Expires:  time.Unix(0, 0),
-		})
+			if session != nil {
+				http.SetCookie(w, &http.Cookie{
+					Name:     m.cookieName,
+					Value:    session.SignedID(m.secret),
+					Path:     m.path,
+					Expires:  session.ExpiresAt,
+					MaxAge:   int(m.ttl.Seconds()),
+					Secure:   m.secure,
+					HttpOnly: m.httpOnly,
+					SameSite: m.sameSite,
+				})
+			}
+		},
 	}
 
-	if exist {
-		ww.AddCookie(&http.Cookie{
-			Name:     m.cookieName,
-			Value:    session.SignedID(m.secret),
-			Path:     m.path,
-			Expires:  session.ExpiresAt,
-			MaxAge:   int(m.ttl.Seconds()),
-			Secure:   m.secure,
-			HttpOnly: m.httpOnly,
-			SameSite: m.sameSite,
-		})
-	}
 	return ww
 }
 
