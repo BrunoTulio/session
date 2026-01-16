@@ -514,18 +514,3 @@ func TestSession_Concurrent(t *testing.T) {
 			"Session should be marked as modified after concurrent writes")
 	})
 }
-
-func TestSession_GenerateId(t *testing.T) {
-	t.Run("should generate id", func(t *testing.T) {
-		ids := make(map[string]bool)
-		iterations := 1000
-		for range iterations {
-			id := generateId()
-			if _, ok := ids[id]; ok {
-				assert.Fail(t, "duplicate id")
-			}
-			ids[id] = true
-		}
-		assert.Len(t, ids, iterations)
-	})
-}

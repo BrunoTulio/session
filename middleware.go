@@ -38,8 +38,17 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 				session.ID[:8]+"...",
 			)
 		}
-		ctx := WithContext(r.Context(), session)
-		ww := m.writerWithCookie(w, session, err)
+		var token string
+		if session != nil {
+			token = encodeSessionId(session.ID, m.secret)
+		}
+
+		sessContext := &Context{
+			Session: session,
+			Token:   token,
+		}
+		ctx := WithContext(r.Context(), sessContext)
+		ww := m.writerWithCookie(w, sessContext, err)
 		next.ServeHTTP(ww, r.WithContext(ctx))
 		m.storeSession(ctx, session)
 	})
@@ -129,7 +138,7 @@ func (m *Middleware) cleanupOldSession(session *Session) {
 	session.clearOldID()
 }
 
-func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Session, err error) *responseWriter {
+func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Context, err error) *responseWriter {
 	ww := &responseWriter{
 		ResponseWriter: w,
 		statusWritten:  false,
@@ -153,7 +162,7 @@ func (m *Middleware) writerWithCookie(w http.ResponseWriter, session *Session, e
 	if exist {
 		ww.AddCookie(&http.Cookie{
 			Name:     m.cookieName,
-			Value:    session.encodeSessionId(m.secret),
+			Value:    session.Token,
 			Path:     m.path,
 			Expires:  session.ExpiresAt,
 			MaxAge:   int(m.ttl.Seconds()),
@@ -246,4 +255,11 @@ func (m *Middleware) unsignCookie(signedValue string) (string, error) {
 	}
 
 	return sessionID, nil
+}
+
+func encodeSessionId(id string, secret string) string {
+	h := hmac.New(sha256.New, []byte(secret))
+	h.Write([]byte(id))
+	sig := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+	return "s:" + id + "." + sig
 }

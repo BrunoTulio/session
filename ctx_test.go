@@ -21,13 +21,18 @@ func TestWithContext_(t *testing.T) {
 			},
 		}
 
+		sessCtx := Context{
+			Session: &s,
+			Token:   "",
+		}
+
 		ctx := context.Background()
-		ctx = WithContext(ctx, &s)
+		ctx = WithContext(ctx, &sessCtx)
 
 		retrieved, err := FromContext(ctx)
 
 		assert.NoError(t, err)
-		assert.Equal(t, &s, retrieved)
+		assert.Equal(t, &sessCtx, retrieved)
 		assert.Equal(t, now, retrieved.CreatedAt)
 		assert.Equal(t, now, retrieved.ExpiresAt)
 		assert.Equal(t, now, retrieved.UpdatedAt)
@@ -58,17 +63,23 @@ func TestFromContext(t *testing.T) {
 			},
 		}
 
+		sessCtx := Context{
+			Session: &s,
+			Token:   "token",
+		}
+
 		ctx := context.Background()
-		ctx = WithContext(ctx, &s)
+		ctx = WithContext(ctx, &sessCtx)
 
 		retrieved, err := FromContext(ctx)
 
 		assert.NoError(t, err)
-		assert.Equal(t, &s, retrieved)
+		assert.Equal(t, &sessCtx, retrieved)
 		assert.Equal(t, now, retrieved.CreatedAt)
 		assert.Equal(t, now, retrieved.ExpiresAt)
 		assert.Equal(t, now, retrieved.UpdatedAt)
 		assert.Equal(t, s.ID, retrieved.ID)
+		assert.Equal(t, "token", sessCtx.Token)
 	})
 	t.Run("should return error session not fount", func(t *testing.T) {
 		ctx := context.Background()
@@ -111,12 +122,17 @@ func TestMustFromContext(t *testing.T) {
 			},
 		}
 
+		sessCtx := Context{
+			Session: &s,
+			Token:   "token",
+		}
+
 		ctx := context.Background()
-		ctx = WithContext(ctx, &s)
+		ctx = WithContext(ctx, &sessCtx)
 
 		retrieved := MustFromContext(ctx)
 
-		assert.Equal(t, &s, retrieved)
+		assert.Equal(t, &sessCtx, retrieved)
 		assert.Equal(t, now, retrieved.CreatedAt)
 		assert.Equal(t, now, retrieved.ExpiresAt)
 		assert.Equal(t, now, retrieved.UpdatedAt)

@@ -1,11 +1,6 @@
 package session
 
 import (
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"sync"
 	"time"
 )
@@ -121,13 +116,6 @@ func (s *Session) Unauthenticate() *Session {
 	return s
 }
 
-func (s *Session) encodeSessionId(secret string) string {
-	h := hmac.New(sha256.New, []byte(secret))
-	h.Write([]byte(s.ID))
-	sig := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
-	return "s:" + s.ID + "." + sig
-}
-
 func (s *Session) HasOldID() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -156,15 +144,4 @@ func (s *Session) GetOldID() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.oldID
-}
-
-// generateID generates a cryptographically secure session ID.
-//
-// In Go 1.24+, crypto/rand.Read never returns an error. If random number
-// generation fails, the program crashes via fatal() as it's unsafe to
-// continue without secure randomness. See: https://go.dev/issue/66821
-func generateId() string {
-	bytes := make([]byte, sessionIDBytes)
-	_, _ = rand.Read(bytes)
-	return hex.EncodeToString(bytes)
 }
