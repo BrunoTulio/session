@@ -14,9 +14,10 @@ const (
 
 type Session struct {
 	SessionData
-	modified bool
-	oldID    string
-	mu       sync.RWMutex
+	modified  bool
+	oldID     string
+	destroyed bool
+	mu        sync.RWMutex
 }
 
 func NewSession(ttl time.Duration) *Session {
@@ -145,6 +146,19 @@ func (s *Session) GetOldID() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.oldID
+}
+
+func (s *Session) Destroy() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.destroyed = true
+	s.modified = true
+}
+
+func (s *Session) IsDestroyed() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.destroyed
 }
 
 func (s *Session) clearOldID() *Session {
