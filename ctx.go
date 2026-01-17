@@ -1,6 +1,9 @@
 package session
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type contextKey string
 
@@ -8,8 +11,24 @@ const (
 	sessionContextKey contextKey = "session"
 )
 
-func WithContext(ctx context.Context, sess *Session) context.Context {
-	return context.WithValue(ctx, sessionContextKey, sess)
+func GetOrCreate(ctx context.Context, ttl time.Duration) *Session {
+	holder := getHolderContext(ctx)
+	if holder == nil {
+		panic("session: middleware not configured")
+	}
+
+	sess := holder.get()
+	if sess != nil {
+		return sess
+	}
+	sess = NewSession(ttl)
+	holder.set(sess)
+	return sess
+}
+
+func HasSession(ctx context.Context) bool {
+	_, err := FromContext(ctx)
+	return err == nil
 }
 
 func MustFromContext(ctx context.Context) *Session {
@@ -22,14 +41,30 @@ func MustFromContext(ctx context.Context) *Session {
 }
 
 func FromContext(ctx context.Context) (*Session, error) {
-	val := ctx.Value(sessionContextKey)
-
-	if val == nil {
+	holder := getHolderContext(ctx)
+	if holder == nil {
 		return nil, ErrSessionNotFound
 	}
 
-	if session, ok := val.(*Session); ok {
-		return session, nil
+	sess := holder.get()
+	if sess == nil {
+		return nil, ErrSessionNotFound
 	}
-	return nil, ErrSessionInvalid
+
+	return sess, nil
+}
+
+func withHolderContext(ctx context.Context, holder *holder) context.Context {
+	return context.WithValue(ctx, sessionContextKey, holder)
+}
+
+func getHolderContext(ctx context.Context) *holder {
+	val := ctx.Value(sessionContextKey)
+	if val == nil {
+		return nil
+	}
+	if holder, ok := val.(*holder); ok {
+		return holder
+	}
+	return nil
 }

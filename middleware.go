@@ -38,11 +38,11 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 				session.ID[:8]+"...",
 			)
 		}
-
-		ctx := WithContext(r.Context(), session)
+		holder := &holder{session: session}
+		ctx := withHolderContext(r.Context(), holder)
 		ww := m.writer(w, session, err)
 		next.ServeHTTP(ww, r.WithContext(ctx))
-		m.storeSession(ctx, session)
+		m.storeSession(ctx, holder.get())
 	})
 }
 
