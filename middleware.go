@@ -46,8 +46,10 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 		ctx = withHolderContext(ctx, holder)
 		ctx = withStoreContext(ctx, m.store)
 
-		ww := m.writer(w, r)
-		next.ServeHTTP(ww, r.WithContext(ctx))
+		rWithCtx := r.WithContext(ctx)
+
+		ww := m.writer(w, rWithCtx)
+		next.ServeHTTP(ww, rWithCtx)
 	})
 }
 
