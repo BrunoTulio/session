@@ -9,6 +9,7 @@ type contextKey string
 
 const (
 	sessionContextKey contextKey = "session"
+	storeContextKey   contextKey = "store"
 )
 
 func GetOrCreate(ctx context.Context, ttl time.Duration) *Session {
@@ -67,4 +68,29 @@ func getHolderContext(ctx context.Context) *holder {
 		return holder
 	}
 	return nil
+}
+
+func withStoreContext(ctx context.Context, store Store) context.Context {
+	return context.WithValue(ctx, storeContextKey, store)
+}
+
+func GetStore(ctx context.Context) (Store, error) {
+	val := ctx.Value(storeContextKey)
+	if val == nil {
+		return nil, ErrStoreNotFound
+	}
+
+	if store, ok := val.(Store); ok {
+		return store, nil
+	}
+
+	return nil, ErrStoreInvalid
+}
+
+func MustGetStore(ctx context.Context) Store {
+	store, err := GetStore(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return store
 }

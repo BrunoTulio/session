@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ type Middleware struct {
 	saveUninitialized bool
 	autoRenew         bool
 	path              string
+	errorHandler      ErrorHandler
 }
 
 func (m *Middleware) Handler(next http.Handler) http.Handler {
@@ -37,11 +39,15 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 				session.ID[:8]+"...",
 			)
 		}
+
+		ctx := r.Context()
 		holder := &holder{session: session}
-		ctx := withHolderContext(r.Context(), holder)
-		ww := m.writer(w, session, err)
+
+		ctx = withHolderContext(ctx, holder)
+		ctx = withStoreContext(ctx, m.store)
+
+		ww := m.writer(w, r)
 		next.ServeHTTP(ww, r.WithContext(ctx))
-		m.storeSession(ctx, holder.get())
 	})
 }
 
@@ -58,6 +64,7 @@ func Handler(opts ...func(*Options)) func(handler http.Handler) http.Handler {
 		Secure:            false,
 		SameSite:          http.SameSiteNoneMode,
 		TTL:               time.Hour * 1,
+		ErrorHandler:      nil,
 	}
 
 	for _, o := range opts {
@@ -76,6 +83,7 @@ func Handler(opts ...func(*Options)) func(handler http.Handler) http.Handler {
 		saveUninitialized: opt.SaveUninitialized,
 		autoRenew:         opt.AutoRenew,
 		path:              opt.Path,
+		errorHandler:      opt.ErrorHandler,
 	}
 
 	return m.Handler
@@ -94,33 +102,12 @@ func HandlerWithOptions(opt Options) func(http.Handler) http.Handler {
 		WithSaveUninitialized(opt.SaveUninitialized),
 		WithAutoRenew(opt.AutoRenew),
 		WithPath(opt.Path),
+		WithErrorHandler(opt.ErrorHandler),
 	)
 }
 
-func (m *Middleware) storeSession(ctx context.Context, session *Session) {
-	if session == nil {
-		return
-	}
-
-	if session.IsDestroyed() {
-		m.log.Debugf("Destroying session: %s", session.ID[:8]+"...")
-		if err := m.store.Delete(ctx, session.ID); err != nil {
-			m.log.Errorf("Failed to delete session: %v", err)
-		}
-		return
-	}
-
-	if session.IsModified() {
-		m.cleanupOldSession(session)
-		if err := m.store.Set(ctx, session.SessionData); err != nil {
-			m.log.Errorf("Failed to set session: %v", err)
-		}
-	}
-
-}
-
 func (m *Middleware) cleanupOldSession(session *Session) {
-	if !session.HasOldID() {
+	if !session.HasOldID() || session.IsNew() {
 		return
 	}
 
@@ -136,28 +123,59 @@ func (m *Middleware) cleanupOldSession(session *Session) {
 	session.clearOldID()
 }
 
-func (m *Middleware) writer(w http.ResponseWriter, session *Session, err error) *responseWriter {
+func (m *Middleware) writer(w http.ResponseWriter, r *http.Request) *responseWriter {
 	ww := &responseWriter{
 		ResponseWriter: w,
-		statusWritten:  false,
-		before: func() {
-			if err != nil && !errors.Is(err, ErrNoCookie) {
-				m.cleanCookie(w)
-				return
-			}
+		request:        r,
+		handler:        m,
+	}
+	return ww
+}
 
-			if session != nil && session.IsDestroyed() {
-				m.cleanCookie(w)
-				return
-			}
+func (m *Middleware) commit(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	holder := getHolderContext(ctx)
 
-			if session != nil {
-				m.setCookie(w, session)
-			}
-		},
+	if holder == nil {
+		return nil
 	}
 
-	return ww
+	session := holder.get()
+	if session == nil {
+		return nil
+	}
+
+	if session.IsDestroyed() {
+		m.log.Debugf("Destroying session: %s", session.ID[:8]+"...")
+		if err := m.store.Delete(ctx, session.ID); err != nil {
+			m.log.Errorf("Failed to delete session: %v", err)
+			return fmt.Errorf("delete session: %w", err)
+		}
+		m.cleanCookie(w)
+		return nil
+	}
+
+	if session.IsModified() {
+		m.cleanupOldSession(session)
+		if err := m.store.Set(ctx, session.SessionData); err != nil {
+			m.log.Errorf("Failed to set session: %v", err)
+			return fmt.Errorf("save session: %w", err)
+		}
+		session.markPersisted()
+	}
+
+	m.setCookie(w, session)
+	return nil
+}
+
+func (m *Middleware) onError(w http.ResponseWriter, r *http.Request, err error) {
+	if m.errorHandler != nil {
+		m.errorHandler(w, r, err)
+		return
+	}
+
+	m.log.Errorf("Session commit failed: %v", err)
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }
 
 func (m *Middleware) setCookie(w http.ResponseWriter, session *Session) {

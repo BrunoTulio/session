@@ -2,14 +2,18 @@ package session
 
 import (
 	"net/http"
-	"sync"
 )
+
+type handler interface {
+	commit(w http.ResponseWriter, r *http.Request) error
+	onError(w http.ResponseWriter, r *http.Request, err error)
+}
 
 type responseWriter struct {
 	http.ResponseWriter
+	request       *http.Request
 	statusWritten bool
-	once          sync.Once
-	before        func()
+	handler       handler
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
@@ -17,8 +21,10 @@ func (rw *responseWriter) WriteHeader(code int) {
 		return
 	}
 
-	if rw.before != nil {
-		rw.once.Do(rw.before)
+	if err := rw.handler.commit(rw.ResponseWriter, rw.request); err != nil {
+		rw.statusWritten = true
+		rw.handler.onError(rw.ResponseWriter, rw.request, err)
+		return
 	}
 
 	rw.statusWritten = true

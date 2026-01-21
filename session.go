@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -17,6 +18,7 @@ type Session struct {
 	modified  bool
 	oldID     string
 	destroyed bool
+	isNew     bool
 	mu        sync.RWMutex
 }
 
@@ -26,6 +28,7 @@ func NewSession(ttl time.Duration) *Session {
 	return &Session{
 		SessionData: data,
 		modified:    true,
+		isNew:       true,
 	}
 }
 
@@ -155,10 +158,42 @@ func (s *Session) Destroy() {
 	s.modified = true
 }
 
+func (s *Session) IsNew() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.isNew
+}
+
 func (s *Session) IsDestroyed() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.destroyed
+}
+
+func (s *Session) Flush(ctx context.Context) error {
+	store, err := GetStore(ctx)
+
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.modified {
+		return nil
+	}
+
+	if err := store.Set(ctx, s.SessionData); err != nil {
+		return err
+	}
+
+	s.modified = false
+	return nil
+}
+
+func (s *Session) markPersisted() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.isNew = false
 }
 
 func (s *Session) clearOldID() *Session {
